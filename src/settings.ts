@@ -1,4 +1,4 @@
-import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder, normalizePath } from "obsidian";
+import { App, PluginSettingTab, SettingDefinitionItem, normalizePath } from "obsidian";
 import type MediaArchive from "./main";
 
 export interface MediaArchiveSettings {
@@ -13,7 +13,8 @@ export const DEFAULT_SETTINGS: MediaArchiveSettings = {
 
 type FolderKey = keyof MediaArchiveSettings;
 
-const cleanFolder = (value: string) => normalizePath(value.trim()).replace(/^\/+|\/+$/g, "");
+const cleanFolder = (key: FolderKey, value: string) =>
+  normalizePath(value.trim()).replace(/^\/+|\/+$/g, "") || DEFAULT_SETTINGS[key];
 
 const contains = (outer: string, inner: string) => inner === outer || inner.startsWith(outer + "/");
 
@@ -25,60 +26,34 @@ export function folderProblem(uploads: string, archive: string): string | null {
   return null;
 }
 
-class FolderSuggest extends AbstractInputSuggest<TFolder> {
-  constructor(app: App, private inputEl: HTMLInputElement) {
-    super(app, inputEl);
-  }
-
-  getSuggestions(query: string): TFolder[] {
-    const q = query.toLowerCase();
-    return this.app.vault.getAllFolders().filter((f) => f.path.toLowerCase().includes(q));
-  }
-
-  renderSuggestion(folder: TFolder, el: HTMLElement) {
-    el.setText(folder.path);
-  }
-
-  selectSuggestion(folder: TFolder) {
-    this.setValue(folder.path);
-    this.inputEl.dispatchEvent(new Event("input"));
-    this.close();
-  }
-}
-
 export class MediaArchiveSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: MediaArchive) {
     super(app, plugin);
   }
 
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-
-    const error = createDiv({ cls: "media-archive-settings-error" });
+  getSettingDefinitions(): SettingDefinitionItem[] {
     const folder = (key: FolderKey, name: string, desc: string) =>
-      new Setting(containerEl)
-        .setName(name)
-        .setDesc(desc)
-        .addText((text) => {
-          new FolderSuggest(this.app, text.inputEl);
-          text
-            .setPlaceholder(DEFAULT_SETTINGS[key])
-            .setValue(this.plugin.settings[key])
-            .onChange(async (value) => {
-              const next = { ...this.plugin.settings, [key]: cleanFolder(value) || DEFAULT_SETTINGS[key] };
-              const problem = folderProblem(next.uploadsFolder, next.archiveFolder);
-              error.setText(problem ?? "");
-              if (problem) return;
-              this.plugin.settings = next;
-              await this.plugin.saveSettings();
-            });
-        });
+      ({
+        name,
+        desc,
+        control: {
+          type: "folder",
+          key,
+          placeholder: DEFAULT_SETTINGS[key],
+          validate: (value: string) => {
+            const next = { ...this.plugin.settings, [key]: cleanFolder(key, value) };
+            return folderProblem(next.uploadsFolder, next.archiveFolder) ?? undefined;
+          },
+        },
+      }) as const;
+    return [
+      folder("uploadsFolder", "Uploads folder", "Unused media here is archived. Archived media that's used again comes back here."),
+      folder("archiveFolder", "Archive folder", "Deleted and unused media goes here. Deleting from here removes it for real."),
+    ];
+  }
 
-    folder("uploadsFolder", "Uploads folder", "Unused media here is archived. Archived media that's used again comes back here.");
-    folder("archiveFolder", "Archive folder", "Deleted and unused media goes here. Deleting from here removes it for real.");
-    containerEl.appendChild(error);
-
-    new Setting(containerEl).setDesc("Changing a folder doesn't move files already in the old one.");
+  async setControlValue(key: string, value: unknown) {
+    this.plugin.settings[key as FolderKey] = cleanFolder(key as FolderKey, String(value));
+    await this.plugin.saveSettings();
   }
 }
