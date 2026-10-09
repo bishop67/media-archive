@@ -1,7 +1,8 @@
 import { around } from "monkey-around";
-import { Notice, Plugin, TAbstractFile, TFile, Vault, debounce } from "obsidian";
+import { Notice, Plugin, TAbstractFile, TFile, TFolder, Vault, debounce } from "obsidian";
 import { DEFAULT_SETTINGS, MediaArchiveSettingTab, MediaArchiveSettings, folderProblem } from "./settings";
 const MEDIA = /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|mp4|webm|mov|mkv|ogv|mp3|wav|m4a|ogg|flac|3gp|pdf)$/i;
+const HTML_SRC = /<(?:img|video|audio|source|embed|iframe)\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
 // A freshly pasted image exists for a moment before the note links to it.
 const GRACE_MS = 60 * 1000;
 
@@ -43,6 +44,13 @@ export default class MediaArchive extends Plugin {
   // Deleting from the archive folder deletes for real.
   private patchDelete() {
     const handle = async (file: TAbstractFile, fallback: () => Promise<void>) => {
+      // A deleted folder's media goes to the archive first, unless the archive is inside it.
+      if (file instanceof TFolder && !inFolder(file, this.archive) && !(this.archive + "/").startsWith(file.path + "/")) {
+        const media = this.app.vault.getFiles().filter((f) => inFolder(f, file.path) && MEDIA.test(f.name));
+        for (const f of media) await this.moveTo(f, this.archive);
+        if (media.length) new Notice(`Archived ${media.length} media file${media.length === 1 ? "" : "s"} from ${file.name}`);
+        return fallback();
+      }
       if (!(file instanceof TFile) || !MEDIA.test(file.name) || inFolder(file, this.archive)) return fallback();
       if ((await this.usedPaths()).has(file.path)) {
         new Notice(`${file.name} is still used in a note, so it stays. Remove it from the note and it archives itself.`);
@@ -81,7 +89,22 @@ export default class MediaArchive extends Plugin {
         Object.values(value).forEach(scan);
       }
     };
-    for (const note of vault.getMarkdownFiles()) scan(metadataCache.getFileCache(note)?.frontmatter);
+    for (const note of vault.getMarkdownFiles()) {
+      scan(metadataCache.getFileCache(note)?.frontmatter);
+      // Obsidian doesn't index HTML embeds like <img src="Media/Uploads/photo.png">.
+      const text = await vault.cachedRead(note);
+      if (!text.includes("src")) continue;
+      for (const [, src] of text.matchAll(HTML_SRC)) {
+        let path = src;
+        try {
+          path = decodeURIComponent(src);
+        } catch {
+          // not URL-encoded
+        }
+        const dest = metadataCache.getFirstLinkpathDest(path.replace(/^\.?\//, ""), note.path);
+        if (dest) used.add(dest.path);
+      }
+    }
 
     for (const canvas of vault.getFiles().filter((f) => f.extension === "canvas")) {
       try {
