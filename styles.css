@@ -1,8 +1,0 @@
-.media-archive-settings-error {
-  color: var(--text-error);
-  font-size: var(--font-ui-small);
-}
-
-.media-archive-settings-error:empty {
-  display: none;
-}

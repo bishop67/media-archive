@@ -11,7 +11,7 @@ It also sorts on its own: unused files in `Media/Uploads` move to the archive, a
 - **Media:** images, video, audio, PDF.
 - **Used** means linked or embedded in a note, named in frontmatter, or on a canvas.
 - **Still in use?** Deleting does nothing and says so.
-- **Settings:** the two folder paths. Point Obsidian's attachment folder at Uploads.
+- **Settings:** the two folder paths. Point Obsidian's attachment folder at Uploads. Changing one doesn't move existing files.
 - **Command:** *Sort media by usage now.*
 
 ## Install
@@ -20,7 +20,7 @@ It also sorts on its own: unused files in `Media/Uploads` move to the archive, a
 npm install && npm run build
 ```
 
-Copy `main.js`, `manifest.json`, `styles.css` to `<vault>/.obsidian/plugins/media-archive/` and enable it.
+Copy `main.js` and `manifest.json` to `<vault>/.obsidian/plugins/media-archive/` and enable it. Needs Obsidian 1.13+.
 
 To release: bump `manifest.json`, push a matching tag (`1.0.1`), publish the draft release.
 
