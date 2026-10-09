@@ -5,14 +5,7 @@ const MEDIA = /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|mp4|webm|mov|mkv|ogv|mp3|
 // A freshly pasted image exists for a moment before the note links to it.
 const GRACE_MS = 60 * 1000;
 
-interface CanvasData {
-  nodes?: { type?: string; file?: string }[];
-}
-
-interface Move {
-  file: TFile;
-  to: string;
-}
+type Move = { file: TFile; to: string };
 
 const inFolder = (file: TAbstractFile, folder: string) => file.path.startsWith(folder + "/");
 
@@ -21,7 +14,7 @@ export default class MediaArchive extends Plugin {
   private sorting = false;
 
   async onload() {
-    await this.loadSettings();
+    this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<MediaArchiveSettings> | null) };
     this.addSettingTab(new MediaArchiveSettingTab(this.app, this));
     this.patchDelete();
     this.addCommand({ id: "sort-media", name: "Sort media by usage now", callback: () => void this.sort(true) });
@@ -34,13 +27,8 @@ export default class MediaArchive extends Plugin {
     });
   }
 
-  async loadSettings() {
-    const saved = (await this.loadData()) as Partial<MediaArchiveSettings> | null;
-    this.settings = { ...DEFAULT_SETTINGS, ...saved };
-  }
-
-  async saveSettings() {
-    await this.saveData(this.settings);
+  saveSettings() {
+    return this.saveData(this.settings);
   }
 
   private get uploads() {
@@ -97,10 +85,8 @@ export default class MediaArchive extends Plugin {
 
     for (const canvas of vault.getFiles().filter((f) => f.extension === "canvas")) {
       try {
-        const data = JSON.parse(await vault.cachedRead(canvas)) as CanvasData;
-        for (const node of data.nodes ?? []) {
-          if (node.type === "file" && node.file) used.add(node.file);
-        }
+        const { nodes = [] } = JSON.parse(await vault.cachedRead(canvas)) as { nodes?: { type?: string; file?: string }[] };
+        for (const node of nodes) if (node.type === "file" && node.file) used.add(node.file);
       } catch {
         // unreadable canvas: skip
       }
