@@ -4,9 +4,10 @@ Deleting media in Obsidian moves it to `Media/Archive` instead of the trash. Del
 
 It also sorts on its own: unused files in `Media/Uploads` move to the archive, and archived files a note uses again move back. New files get 60 seconds before they can be archived.
 
-| <img src="docs/notices.png" alt="Archive notices" height="200"> | <img src="docs/explorer.png" alt="Media folders in the file explorer" height="200"> |
-|:---:|:---:|
-| Delete archives it, unless a note still uses it | Uploads and Archive folders |
+<p align="center">
+  <img src="docs/notices.png" alt="Notices: archived, or kept because a note still uses it" width="62.3%">
+  <img src="docs/explorer.png" alt="Uploads and Archive folders in the file explorer" width="36.2%">
+</p>
 
 - **Media:** images, video, audio, PDF.
 - **Used** means linked or embedded in a note, named in frontmatter, or on a canvas.
