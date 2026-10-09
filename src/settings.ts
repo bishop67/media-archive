@@ -75,20 +75,10 @@ export class MediaArchiveSettingTab extends PluginSettingTab {
             });
         });
 
-    folder(
-      "uploadsFolder",
-      "Uploads folder",
-      "Media that notes use. Unused files here are archived automatically, and archived files that are used again come back here."
-    );
-    folder(
-      "archiveFolder",
-      "Archive folder",
-      "Deleted and unused media goes here. Deleting a file from this folder removes it for real."
-    );
+    folder("uploadsFolder", "Uploads folder", "Unused media here is archived. Archived media that's used again comes back here.");
+    folder("archiveFolder", "Archive folder", "Deleted and unused media goes here. Deleting from here removes it for real.");
     containerEl.appendChild(error);
 
-    new Setting(containerEl).setDesc(
-      "Changing a folder doesn't move files that are already in the old one. Creates the folder if it doesn't exist yet."
-    );
+    new Setting(containerEl).setDesc("Changing a folder doesn't move files already in the old one.");
   }
 }
