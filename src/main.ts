@@ -1,8 +1,8 @@
 import { around } from "monkey-around";
 import { Notice, Plugin, TAbstractFile, TFile, TFolder, Vault, debounce } from "obsidian";
+import { HTML_SRC, collectRefs, resolveSrc } from "./links";
 import { DEFAULT_SETTINGS, MediaArchiveSettingTab, MediaArchiveSettings, folderProblem } from "./settings";
 const MEDIA = /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|mp4|webm|mov|mkv|ogv|mp3|wav|m4a|ogg|flac|3gp|pdf)$/i;
-const HTML_SRC = /<(?:img|video|audio|source|embed|iframe)\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
 // A freshly pasted image exists for a moment before the note links to it.
 const GRACE_MS = 60 * 1000;
 
@@ -95,13 +95,7 @@ export default class MediaArchive extends Plugin {
       const text = await vault.cachedRead(note);
       if (!text.includes("src")) continue;
       for (const [, src] of text.matchAll(HTML_SRC)) {
-        let path = src;
-        try {
-          path = decodeURIComponent(src);
-        } catch {
-          // not URL-encoded
-        }
-        const dest = metadataCache.getFirstLinkpathDest(path.replace(/^\.?\//, ""), note.path);
+        const dest = resolveSrc(this.app, src, note.path);
         if (dest) used.add(dest.path);
       }
     }
@@ -142,11 +136,12 @@ export default class MediaArchive extends Plugin {
     }
     this.sorting = true;
     try {
+      const copies = await this.dedupe();
       const moves = await this.plan();
       for (const { file, to } of moves) await this.moveTo(file, to);
       const archived = moves.filter((m) => m.to === this.archive).length;
-      const restored = moves.length - archived;
-      if (moves.length || manual) new Notice(`Media: ${archived} archived, ${restored} back in ${this.uploads}`);
+      const restored = moves.length - archived + copies;
+      if (moves.length || copies || manual) new Notice(`Media: ${archived} archived, ${restored} back in ${this.uploads}`);
     } finally {
       this.sorting = false;
     }
@@ -159,6 +154,28 @@ export default class MediaArchive extends Plugin {
     for (let n = 1; vault.getAbstractFileByPath(target); n++) {
       target = `${folder}/${file.basename} (${n}).${file.extension}`;
     }
-    await this.app.fileManager.renameFile(file, target);
+    const relink = await collectRefs(this.app, file);
+    await vault.rename(file, target);
+    await relink(file);
+  }
+
+  // An exact copy of an archived file in Uploads is a restore: keep the copy, point the archived
+  // one's links at it, and trash the archived one.
+  private async dedupe() {
+    const { vault } = this.app;
+    const media = vault.getFiles().filter((f) => MEDIA.test(f.name) && f.stat.size > 0);
+    const archived = media.filter((f) => inFolder(f, this.archive));
+    let removed = 0;
+    for (const copy of media.filter((f) => inFolder(f, this.uploads))) {
+      for (const old of archived.filter((f) => f.stat.size === copy.stat.size && f.extension === copy.extension)) {
+        const [a, b] = [new Uint8Array(await vault.readBinary(copy)), new Uint8Array(await vault.readBinary(old))];
+        if (!a.every((byte, i) => byte === b[i])) continue;
+        await (await collectRefs(this.app, old))(copy);
+        await this.app.fileManager.trashFile(old);
+        archived.splice(archived.indexOf(old), 1);
+        removed++;
+      }
+    }
+    return removed;
   }
 }

@@ -12,6 +12,7 @@ It also sorts on its own: unused files in `Media/Uploads` move to the archive, a
 - **Media:** images, video, audio, PDF.
 - **Used** means linked or embedded in a note, named in frontmatter, or on a canvas.
 - **Still in use?** Deleting does nothing and says so.
+- **Restore:** use it in a note, or copy it into Uploads. Links follow every move, without the "Update links?" prompt.
 - **Settings:** the two folder paths. Point Obsidian's attachment folder at Uploads. Changing one doesn't move existing files.
 - **Command:** *Sort media by usage now.*
 
