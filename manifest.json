@@ -1,7 +1,7 @@
 {
   "id": "media-archive",
   "name": "Media Archive",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "minAppVersion": "1.13.0",
   "description": "Move deleted media to an archive folder instead of the trash, and archive media that no note uses anymore.",
   "author": "bishop67",
