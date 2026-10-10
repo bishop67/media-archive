@@ -15,10 +15,13 @@ export function resolveSrc(app: App, src: string, sourcePath: string) {
 
 // Swaps the path in a wikilink, markdown link or embed, keeping its alias, heading and syntax.
 function retarget(original: string, path: string) {
-  if (original.includes("](")) {
-    return original.replace(/(\]\(\s*<?)[^)>#]+/, (_, lead: string) => lead + (lead.endsWith("<") ? path : encodeURI(path)));
-  }
-  return original.replace(/^(!?\[\[)[^|\]#]*/, (_, lead: string) => lead + path);
+  const i = original.indexOf("](");
+  if (i < 0) return original.replace(/^(!?\[\[)[^|\]#]*/, (_, lead: string) => lead + path);
+  // The target runs to the closing ")", and may itself contain parentheses: "photo%20(1).png".
+  const target = original.slice(i + 2, -1).trim();
+  const sub = target.replace(/^<|>$/g, "").match(/#.*$/)?.[0] ?? "";
+  const dest = target.startsWith("<") ? `<${path}${sub}>` : encodeURI(path).replace(/\(/g, "%28").replace(/\)/g, "%29") + sub;
+  return `${original.slice(0, i + 2)}${dest})`;
 }
 
 // Finds every reference to `file` (links, embeds, frontmatter links, HTML src, canvas cards) and returns
@@ -52,13 +55,12 @@ export async function collectRefs(app: App, file: TFile) {
       const src = (old: string) => (old.includes("%") ? encodeURI(target.path) : target.path);
       if (body.length || srcs.size) {
         await vault.process(note, (text) => {
-          // Last first, so earlier offsets stay valid. Skip any ref the note no longer matches.
-          for (const r of [...body].sort((a, b) => b.position.start.offset - a.position.start.offset)) {
-            const { start, end } = r.position;
-            if (text.slice(start.offset, end.offset) !== r.original) continue;
-            text = text.slice(0, start.offset) + retarget(r.original, link) + text.slice(end.offset);
-          }
-          return srcs.size ? text.replace(HTML_SRC, (m, old: string) => (srcs.has(old) ? m.replace(old, src(old)) : m)) : text;
+          // By text, not offset: an earlier move in the same sort may have edited this note before
+          // the metadata cache caught up.
+          for (const original of new Set(body.map((r) => r.original))) text = text.split(original).join(retarget(original, link));
+          if (!srcs.size) return text;
+          // The src value ends the match, so swap the end rather than the first occurrence.
+          return text.replace(HTML_SRC, (m, old: string) => (srcs.has(old) ? m.slice(0, -(old.length + 1)) + src(old) + m.slice(-1) : m));
         });
       }
       if (fm.length) {
