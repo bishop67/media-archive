@@ -56,7 +56,7 @@ export default class MediaArchive extends Plugin {
         new Notice(`${file.name} is still used in a note, so it stays. Remove it from the note and it archives itself.`);
         return;
       }
-      await this.moveTo(file, this.archive);
+      await this.moveTo(file, this.archive, false);
       new Notice(`Archived ${file.name}`);
     };
     // around() chains with other plugins' patches and removes only ours on unload.
@@ -138,7 +138,7 @@ export default class MediaArchive extends Plugin {
     try {
       const copies = await this.dedupe();
       const moves = await this.plan();
-      for (const { file, to } of moves) await this.moveTo(file, to);
+      for (const { file, to } of moves) await this.moveTo(file, to, to === this.uploads);
       const archived = moves.filter((m) => m.to === this.archive).length;
       const restored = moves.length - archived + copies;
       if (moves.length || copies || manual) new Notice(`Media: ${archived} archived, ${restored} back in ${this.uploads}`);
@@ -147,16 +147,17 @@ export default class MediaArchive extends Plugin {
     }
   }
 
-  private async moveTo(file: TFile, folder: string) {
+  // `relink` can be false for unused files: nothing references them, so there are no links to fix.
+  private async moveTo(file: TFile, folder: string, relink = true) {
     const vault = this.app.vault;
     if (!vault.getAbstractFileByPath(folder)) await vault.createFolder(folder);
     let target = `${folder}/${file.name}`;
     for (let n = 1; vault.getAbstractFileByPath(target); n++) {
       target = `${folder}/${file.basename} (${n}).${file.extension}`;
     }
-    const relink = await collectRefs(this.app, file);
+    const retarget = relink ? await collectRefs(this.app, file) : null;
     await vault.rename(file, target);
-    await relink(file);
+    await retarget?.(file);
   }
 
   // An exact copy of an archived file in Uploads is a restore: keep the copy, point the archived
