@@ -1,2 +1,7 @@
 node_modules/
 main.js
+
+# Claude
+.claude/
+CLAUDE.md
+CLAUDE.local.md
